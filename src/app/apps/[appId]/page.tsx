@@ -22,6 +22,26 @@ interface Log {
   metadata?: Record<string, unknown>;
 }
 
+function getLevelColor(level?: string) {
+  switch (level) {
+    case "error": return "bg-red-600/20 text-red-400 border border-red-400/30";
+    case "warn": return "bg-yellow-500/20 text-yellow-400 border border-yellow-400/30";
+    case "info": return "bg-blue-600/20 text-blue-400 border border-blue-400/30";
+    case "debug": return "bg-green-600/20 text-green-400 border border-green-400/30";
+    default: return "bg-gray-700/20 text-gray-300 border border-gray-400/20";
+  }
+}
+
+function relativeTime(dateString: string) {
+  const now = new Date();
+  const date = new Date(dateString);
+  const diff = (now.getTime() - date.getTime()) / 1000;
+  if (diff < 60) return `${Math.floor(diff)}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return date.toLocaleDateString();
+}
+
 export default function AppDetailPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -31,6 +51,7 @@ export default function AppDetailPage() {
   const [logs, setLogs] = useState<Log[]>([]);
   const [fetching, setFetching] = useState(true);
   const [, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!loading && !user) {
@@ -87,16 +108,48 @@ export default function AppDetailPage() {
         {logs.length === 0 ? (
           <div className="text-gray-400">No logs found for this app.</div>
         ) : (
-          <ul className="divide-y divide-white/10">
+          <div className="max-h-[600px] overflow-y-auto space-y-4 pr-2">
             {logs.map((log, i) => (
-              <li key={log.id || i} className="py-2">
-                <div className="text-xs text-gray-400 mb-1">{new Date(log.timestamp).toLocaleString()}</div>
-                <div className="text-white font-mono text-sm">{log.message}</div>
-                {log.level && <span className="inline-block text-xs px-2 py-0.5 rounded bg-accent/20 text-accent ml-2">{log.level}</span>}
-                {log.metadata && <pre className="text-xs text-gray-400 mt-1">{JSON.stringify(log.metadata, null, 2)}</pre>}
-              </li>
+              <div
+                key={log.id || i}
+                className="transition bg-zinc-900/80 border border-white/10 rounded-lg p-4 shadow hover:shadow-lg hover:border-accent/40 group relative"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span
+                    className="text-xs text-gray-400 cursor-help"
+                    title={new Date(log.timestamp).toLocaleString()}
+                  >
+                    {relativeTime(log.timestamp)}
+                  </span>
+                  {log.level && (
+                    <span
+                      className={`ml-2 px-2 py-0.5 rounded text-xs font-semibold border ${getLevelColor(log.level)}`}
+                    >
+                      {log.level.toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div className="text-white font-mono text-sm break-words mb-2">
+                  {log.message}
+                </div>
+                {log.metadata && (
+                  <div>
+                    <button
+                      className="text-xs text-accent hover:underline focus:outline-none mb-1"
+                      onClick={() => setExpanded(e => ({ ...e, [log.id]: !e[log.id] }))}
+                    >
+                      {expanded[log.id] ? "Hide metadata" : "Show metadata"}
+                    </button>
+                    {expanded[log.id] && (
+                      <pre className="text-xs bg-zinc-800/80 rounded p-2 text-gray-300 border border-white/10 overflow-x-auto mt-1">
+                        {JSON.stringify(log.metadata, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                )}
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </div>
