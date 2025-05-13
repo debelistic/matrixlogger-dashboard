@@ -6,8 +6,8 @@ function getAuthHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export async function fetchLogs(limit: number = 5) {
-  const res = await fetch(`${API_URL}/logs?limit=${limit}`, {
+export async function fetchLogs(appId: string, limit: number = 5) {
+  const res = await fetch(`${API_URL}/logs?limit=${limit}&appId=${appId}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',

@@ -50,8 +50,8 @@ export default function AppDetailPage() {
       const apps = await appsApi.fetchApps();
       const found = apps.find((a: App) => a.id === appId);
       setApp(found);
-      const logs = await logsApi.fetchLogs(10);
-      setLogs(logs.filter((log: Log) => log.appId === appId));
+      const logs = await logsApi.fetchLogs(appId, 100);
+      setLogs(logs);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load app details");
     } finally {
