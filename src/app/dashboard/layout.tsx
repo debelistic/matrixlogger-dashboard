@@ -1,5 +1,7 @@
 "use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import "../globals.css";
 import { useAuth } from "../../context/AuthContext";
 import { useOrganization } from "../../context/OrganizationContext";
@@ -14,44 +16,64 @@ export default function DashboardLayout({
   const { user, logout } = useAuth();
   const { organizations, currentOrganization, setCurrentOrganization } = useOrganization();
   const [showOrgModal, setShowOrgModal] = useState(false);
+  const pathname = usePathname();
+
+  const navItems = [
+    { name: "Dashboard", href: "/dashboard" },
+    { name: "Apps", href: "/apps" },
+    { name: "Settings", href: "/settings" },
+  ];
 
   return (
     <div className="min-h-screen flex">
       {/* Sidebar */}
-      <aside className="bg-primary border-r border-primary w-64 min-h-screen hidden md:flex flex-col py-8 px-4 relative">
-        <div className="mb-10 flex flex-col items-center">
+      <aside className="bg-[#0e1117] border-r border-zinc-800 w-64 min-h-screen hidden md:flex flex-col px-4 pt-6 pb-6">
+        {/* Logo */}
+        <div className="mb-8 flex flex-col items-center">
           <Image src="/logo.webp" alt="MatrixLogger logo" width={48} height={48} className="rounded-lg shadow mb-2" priority />
-          <span className="text-2xl font-bold text-accent tracking-tight">MatrixLogger</span>
+          <span className="text-xl font-bold text-accent tracking-tight">MatrixLogger</span>
         </div>
-        <nav className="flex flex-col gap-2 text-base flex-1">
-          <Link href="/dashboard" className="py-2 px-3 rounded-lg hover:bg-secondary transition-colors">Dashboard</Link>
-          <Link href="/apps" className="py-2 px-3 rounded-lg hover:bg-secondary transition-colors">Apps</Link>
-          <Link href="/settings" className="py-2 px-3 rounded-lg hover:bg-secondary transition-colors">Settings</Link>
+
+        {/* Navigation */}
+        <nav className="flex flex-col gap-2 text-sm flex-grow">
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`px-3 py-2 rounded-lg transition-all ${
+                pathname === item.href
+                  ? "bg-zinc-800 text-white font-medium"
+                  : "text-gray-300 hover:text-white hover:bg-zinc-800"
+              }`}
+            >
+              {item.name}
+            </Link>
+          ))}
           <button
             onClick={logout}
-            className="text-left py-2 px-3 rounded-lg hover:bg-secondary transition-colors text-red-400"
+            className="mt-2 px-3 py-2 text-left rounded-lg text-red-400 hover:bg-red-900/20 transition-colors"
           >
             Logout
           </button>
         </nav>
 
         {/* Organization Selector */}
-        <div className="px-2 py-4 border-t border-primary mt-auto relative">
+        <div className="mt-4 border-t border-zinc-800 pt-4 relative">
           <button
             onClick={() => setShowOrgModal(!showOrgModal)}
-            className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-secondary transition-colors group"
+            className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-800 transition-colors group"
           >
-            <div className="w-8 h-8 rounded bg-accent/20 flex items-center justify-center">
+            <div className="w-8 h-8 rounded bg-accent/20 flex items-center justify-center text-accent font-semibold">
               {currentOrganization?.name?.[0] || '?'}
             </div>
             <div className="flex-1 text-left">
               <div className="text-sm font-medium truncate">{currentOrganization?.name || 'Select Organization'}</div>
               <div className="text-xs text-gray-400">Switch Organization</div>
             </div>
-            <svg 
-              className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform ${showOrgModal ? 'rotate-180' : ''}`} 
-              fill="none" 
-              viewBox="0 0 24 24" 
+            <svg
+              className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform ${showOrgModal ? 'rotate-180' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
               stroke="currentColor"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -60,8 +82,8 @@ export default function DashboardLayout({
 
           {/* Organization Dropdown */}
           {showOrgModal && (
-            <div 
-              className="absolute bottom-full left-0 w-full p-2 mb-2 bg-zinc-900 rounded-lg border border-zinc-800 shadow-lg max-h-[calc(100vh-400px)] overflow-y-auto"
+            <div
+              className="absolute bottom-16 left-0 w-full p-2 bg-[#1b1f25] text-white rounded-lg border border-zinc-700 shadow-lg max-h-60 overflow-y-auto z-50"
               onClick={e => e.stopPropagation()}
             >
               <div className="space-y-1">
@@ -73,7 +95,7 @@ export default function DashboardLayout({
                       setShowOrgModal(false);
                     }}
                     className={`w-full flex items-center gap-2 p-2 rounded-lg transition-colors ${
-                      currentOrganization?._id === org._id ? 'bg-accent text-black' : 'hover:bg-secondary'
+                      currentOrganization?._id === org._id ? 'bg-accent text-black' : 'hover:bg-zinc-800'
                     }`}
                   >
                     <div className={`w-8 h-8 rounded flex items-center justify-center ${
@@ -92,10 +114,10 @@ export default function DashboardLayout({
                     )}
                   </button>
                 ))}
-                
+
                 <Link
                   href="/organizations/new"
-                  className="w-full flex items-center justify-center gap-2 p-2 rounded-lg bg-accent/10 hover:bg-accent/20 text-accent transition-colors mt-2 border-t border-zinc-800 pt-3"
+                  className="w-full flex items-center justify-center gap-2 p-2 rounded-lg bg-accent/10 text-white hover:bg-accent/20 transition-colors mt-2 border-t border-zinc-700 pt-3"
                   onClick={() => setShowOrgModal(false)}
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -108,21 +130,21 @@ export default function DashboardLayout({
           )}
         </div>
 
-        {/* User info at the bottom */}
+        {/* User info */}
         {user && (
-          <div className="absolute bottom-6 left-4 flex items-center gap-3">
+          <div className="mt-6 border-t border-zinc-800 pt-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-white font-bold text-lg">
               {user.name ? user.name[0].toUpperCase() : user.email[0].toUpperCase()}
             </div>
             <div className="flex flex-col">
               <span className="text-white font-semibold text-sm leading-tight">{user.name}</span>
-              <span className="text-secondary text-xs leading-tight">{user.email}</span>
+              <span className="text-gray-500 text-xs leading-tight">{user.email}</span>
             </div>
           </div>
         )}
       </aside>
 
-      {/* Mobile header */}
+      {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 z-50 w-full flex items-center bg-primary border-b border-primary h-14 px-4">
         <div className="flex-1 flex items-center gap-2">
           <Image src="/logo_with_text.webp" alt="MatrixLogger" width={160} height={32} className="h-8 w-auto" priority />
@@ -135,4 +157,4 @@ export default function DashboardLayout({
       </main>
     </div>
   );
-} 
+}
