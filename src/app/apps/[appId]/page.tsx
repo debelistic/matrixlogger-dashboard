@@ -23,6 +23,13 @@ interface Log {
   metadata?: Record<string, unknown>;
 }
 
+interface PaginationMeta {
+  hasNextPage: boolean;
+  nextCursor: string | null;
+  prevCursor: string | null;
+  limit: number;
+}
+
 function formatLogLine(log: Log) {
   const time = new Date(log.timestamp).toLocaleTimeString();
   const level = log.level?.toUpperCase() || "INFO";
@@ -50,7 +57,7 @@ export default function AppDetailPage() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [logOffset, setLogOffset] = useState(0);
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -67,22 +74,30 @@ export default function AppDetailPage() {
     }
   }, [appId]);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const fetchLogs = useCallback(async (offset = 0, limit = 50) => {
+  const fetchLogs = useCallback(async (cursor?: string | null) => {
+    if (!appId || (cursor === null && pagination?.hasNextPage === false)) return;
+    
     try {
-      const newLogs = await logsApi.fetchLogs(appId, limit);
+      setFetching(true);
+      const response = await logsApi.fetchLogs(appId, {
+        limit: 50,
+        cursor
+      });
+      
       setLogs(prev => {
+        if (!cursor) return response.data;
         const existingIds = new Set(prev.map(log => log.id));
-        const filteredNew = newLogs.filter((log: Log) => !existingIds.has(log.id));
+        const filteredNew = response.data.filter((log: Log) => !existingIds.has(log.id));
         return [...prev, ...filteredNew];
       });
-      setLogOffset(prev => prev + limit);
+      
+      setPagination(response.pagination);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load logs");
     } finally {
       setFetching(false);
     }
-  }, [appId]);
+  }, [appId, pagination?.hasNextPage]);
 
   useEffect(() => {
     if (user && appId) {
@@ -98,15 +113,14 @@ export default function AppDetailPage() {
 
     const handleScroll = () => {
       const nearBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 100;
-      if (nearBottom && !fetching) {
-        setFetching(true);
-        fetchLogs(logOffset);
+      if (nearBottom && !fetching && pagination?.hasNextPage) {
+        fetchLogs(pagination.nextCursor);
       }
     };
 
     container.addEventListener("scroll", handleScroll);
     return () => container.removeEventListener("scroll", handleScroll);
-  }, [fetchLogs, fetching, logOffset]);
+  }, [fetchLogs, fetching, pagination]);
 
   if (loading || fetching && logs.length === 0) {
     return <div className="text-center py-20 text-gray-400 animate-pulse">Loading logs...</div>;
