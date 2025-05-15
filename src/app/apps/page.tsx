@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import { useOrganization } from "../../context/OrganizationContext";
@@ -31,15 +31,7 @@ export default function AppsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
 
-  useEffect(() => {
-    if (!loading && !user) router.replace("/auth/login");
-  }, [user, loading, router]);
-
-  useEffect(() => {
-    if (user && currentOrganization) fetchAll();
-  }, [user, currentOrganization]);
-
-  async function fetchAll() {
+  const fetchAll = useCallback(async () => {
     if (!currentOrganization) return;
     setFetching(true);
     setError(null);
@@ -51,7 +43,15 @@ export default function AppsPage() {
     } finally {
       setFetching(false);
     }
-  }
+  }, [currentOrganization]);
+
+  useEffect(() => {
+    if (user && currentOrganization) fetchAll();
+  }, [user, currentOrganization, fetchAll]);
+
+  useEffect(() => {
+    if (!loading && !user) router.replace("/auth/login");
+  }, [user, loading, router]);
 
   async function handleAddOrEdit(e: React.FormEvent) {
     e.preventDefault();

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Organization, fetchOrganizations } from '../api/organizations';
 import { useAuth } from './AuthContext';
@@ -25,7 +25,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
   const router = useRouter();
   const pathname = usePathname();
 
-  const refreshOrganizations = async () => {
+  const refreshOrganizations = useCallback(async () => {
     if (!user) return;
     
     try {
@@ -44,13 +44,13 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, currentOrganization]);
 
   useEffect(() => {
     if (!authLoading && user) {
       refreshOrganizations();
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, refreshOrganizations]);
 
   // Redirect to organization selection if needed
   useEffect(() => {

@@ -78,10 +78,10 @@ export default function OrganizationsPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {organizations.map((org) => (
             <button
-              key={org.id}
+              key={org._id}
               onClick={() => handleOrganizationSelect(org)}
               className={`p-6 rounded-lg border text-left transition-all ${
-                selectedOrg?.id === org.id
+                selectedOrg?._id === org._id
                   ? 'bg-accent/10 border-accent'
                   : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'
               }`}
