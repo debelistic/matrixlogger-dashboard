@@ -148,4 +148,17 @@ export async function removeMember(orgId: string, memberId: string) {
   });
 
   if (!res.ok) throw new Error('Failed to remove member');
+}
+
+export async function resendInvitation(orgId: string, memberId: string) {
+  const res = await fetch(`${API_URL}/organizations/${orgId}/members/${memberId}/resend-invite`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+  });
+
+  if (!res.ok) throw new Error('Failed to resend invitation');
+  return res.json();
 } 

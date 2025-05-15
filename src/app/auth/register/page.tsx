@@ -1,115 +1,240 @@
 "use client";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
-import { useAuth } from "../../../context/AuthContext";
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '../../../context/AuthContext';
+import toast from 'react-hot-toast';
 import Image from "next/image";
-import { useEffect } from "react";
-
-const RegisterSchema = z.object({
-  name: z.string().min(2, { message: "Name is required" }),
-  email: z.string().email({ message: "Invalid email address" }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters" }),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords do not match",
-  path: ["confirmPassword"],
-});
-
-type RegisterForm = z.infer<typeof RegisterSchema>;
 
 export default function RegisterPage() {
-  const { register: registerUser, error, loading, user } = useAuth();
   const router = useRouter();
-  const {
-    register: formRegister,
-    handleSubmit,
-    formState: { errors },
-    setError,
-    clearErrors,
-  } = useForm<RegisterForm>({ resolver: zodResolver(RegisterSchema) });
+  const searchParams = useSearchParams();
+  const { user, loading: authLoading } = useAuth();
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: ''
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      router.replace("/dashboard");
+    if (!authLoading && user) {
+      const redirect = searchParams.get('redirect') || '/dashboard';
+      router.replace(redirect);
     }
-  }, [user, router]);
 
-  async function onSubmit(data: RegisterForm) {
-    clearErrors();
-    try {
-      await registerUser(data.name, data.email, data.password);
-      router.push("/dashboard");
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Registration failed";
-      setError("root", { message });
+    // Pre-fill email if provided in query params
+    const email = searchParams.get('email');
+    if (email) {
+      setForm(prev => ({ ...prev, email }));
     }
+  }, [authLoading, user, router, searchParams]);
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!form.name.trim()) {
+      newErrors.name = 'Name is required';
+    }
+
+    if (!form.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      newErrors.email = 'Invalid email format';
+    }
+
+    if (!form.password) {
+      newErrors.password = 'Password is required';
+    } else if (form.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
+
+    if (form.password !== form.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          password: form.password
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Registration failed');
+      }
+
+      // Store token
+      localStorage.setItem('token', data.token);
+
+      toast.success('Registration successful!');
+
+      // Redirect to the specified URL or dashboard
+      const redirect = searchParams.get('redirect') || '/dashboard';
+      router.replace(redirect);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Registration failed';
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading || authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-accent">Loading...</div>
+      </div>
+    );
   }
 
-  if (user) return null;
+  if (user) {
+    return null;
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-2">
-      <div className="max-w-md w-full space-y-8 p-6 sm:p-8 bg-primary rounded-xl shadow-lg">
-        {/* App Logo */}
-        <div className="flex flex-col items-center mb-2">
-          <Image src="/logo.webp" alt="MatrixLogger logo" width={48} height={48} className="rounded-lg shadow" priority />
-          <span className="mt-2 text-xl font-bold text-accent tracking-tight">MatrixLogger</span>
-        </div>
-        {/* Social Auth Buttons */}
-        <div className="flex flex-col gap-3 mb-4">
-          <a href="/api/v1/auth/github" className="flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 rounded-lg transition-colors border border-gray-700">
-            <svg width="20" height="20" fill="currentColor" className="mr-2" viewBox="0 0 24 24"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.73 1.27 3.4.97.11-.75.41-1.27.74-1.56-2.56-.29-5.26-1.28-5.26-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 2.9-.39c.98 0 1.97.13 2.9.39 2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.43-2.7 5.41-5.27 5.7.42.36.79 1.09.79 2.2 0 1.59-.01 2.87-.01 3.26 0 .31.21.68.8.56C20.71 21.39 24 17.08 24 12c0-6.27-5.23-11.5-12-11.5z"/></svg>
-            Continue with GitHub
-          </a>
-          <a href="/api/v1/auth/google" className="flex items-center justify-center gap-2 bg-white hover:bg-gray-100 text-gray-800 font-medium py-2 rounded-lg transition-colors border border-gray-300">
-            <svg width="20" height="20" viewBox="0 0 48 48"><g><path fill="#4285F4" d="M24 9.5c3.54 0 6.7 1.22 9.19 3.23l6.85-6.85C36.13 2.7 30.45 0 24 0 14.82 0 6.73 5.82 2.69 14.09l7.98 6.19C12.13 14.09 17.62 9.5 24 9.5z"/><path fill="#34A853" d="M46.1 24.55c0-1.64-.15-3.22-.42-4.74H24v9.01h12.42c-.54 2.9-2.18 5.36-4.65 7.03l7.19 5.6C43.27 37.27 46.1 31.45 46.1 24.55z"/><path fill="#FBBC05" d="M10.67 28.68a14.5 14.5 0 0 1 0-9.36l-7.98-6.19A23.94 23.94 0 0 0 0 24c0 3.77.9 7.34 2.69 10.55l7.98-6.19z"/><path fill="#EA4335" d="M24 48c6.45 0 12.13-2.13 16.63-5.8l-7.19-5.6c-2.01 1.35-4.6 2.15-7.44 2.15-6.38 0-11.87-4.59-13.83-10.81l-7.98 6.19C6.73 42.18 14.82 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></g></svg>
-            Continue with Google
-          </a>
-        </div>
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="max-w-md w-full space-y-8">
         <div>
-          <h2 className="text-center text-2xl font-bold text-accent mb-2">Create your account</h2>
-          <p className="mt-2 text-center text-secondary text-sm">
-            Already have an account? <a href="/auth/login" className="text-accent hover:underline">Sign in</a>
+          <h2 className="text-3xl font-bold text-center text-accent">Create Account</h2>
+          <p className="mt-2 text-center text-gray-400">
+            Join MatrixLogger to start monitoring your applications
           </p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)} noValidate>
+
+        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <div className="space-y-4">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-secondary">Full name</label>
-              <input id="name" type="text" autoComplete="name" {...formRegister("name")}
-                className="mt-1 block w-full px-3 py-2 bg-secondary border border-primary rounded-md text-primary placeholder-gray-400 focus:outline-none focus:ring-accent focus:border-accent"
+              <label htmlFor="name" className="block text-sm font-medium text-gray-300">
+                Name
+              </label>
+              <input
+                id="name"
+                type="text"
+                value={form.name}
+                onChange={(e) => {
+                  setForm({ ...form, name: e.target.value });
+                  if (errors.name) setErrors({ ...errors, name: '' });
+                }}
+                className={`mt-1 block w-full px-4 py-2 bg-white/5 border ${
+                  errors.name ? 'border-red-500' : 'border-white/10'
+                } rounded-lg text-white focus:ring-2 focus:ring-accent`}
+                placeholder="John Doe"
               />
-              {errors.name && <div className="text-red-500 text-xs mt-1">{errors.name.message}</div>}
+              {errors.name && (
+                <p className="mt-1 text-sm text-red-500">{errors.name}</p>
+              )}
             </div>
+
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-secondary">Email address</label>
-              <input id="email" type="email" autoComplete="email" {...formRegister("email")}
-                className="mt-1 block w-full px-3 py-2 bg-secondary border border-primary rounded-md text-primary placeholder-gray-400 focus:outline-none focus:ring-accent focus:border-accent"
+              <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={form.email}
+                onChange={(e) => {
+                  setForm({ ...form, email: e.target.value });
+                  if (errors.email) setErrors({ ...errors, email: '' });
+                }}
+                className={`mt-1 block w-full px-4 py-2 bg-white/5 border ${
+                  errors.email ? 'border-red-500' : 'border-white/10'
+                } rounded-lg text-white focus:ring-2 focus:ring-accent`}
+                placeholder="you@example.com"
+                readOnly={!!searchParams.get('email')}
               />
-              {errors.email && <div className="text-red-500 text-xs mt-1">{errors.email.message}</div>}
+              {errors.email && (
+                <p className="mt-1 text-sm text-red-500">{errors.email}</p>
+              )}
             </div>
+
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-secondary">Password</label>
-              <input id="password" type="password" autoComplete="new-password" {...formRegister("password")}
-                className="mt-1 block w-full px-3 py-2 bg-secondary border border-primary rounded-md text-primary placeholder-gray-400 focus:outline-none focus:ring-accent focus:border-accent"
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={form.password}
+                onChange={(e) => {
+                  setForm({ ...form, password: e.target.value });
+                  if (errors.password) setErrors({ ...errors, password: '' });
+                }}
+                className={`mt-1 block w-full px-4 py-2 bg-white/5 border ${
+                  errors.password ? 'border-red-500' : 'border-white/10'
+                } rounded-lg text-white focus:ring-2 focus:ring-accent`}
+                placeholder="••••••••"
               />
-              {errors.password && <div className="text-red-500 text-xs mt-1">{errors.password.message}</div>}
+              {errors.password && (
+                <p className="mt-1 text-sm text-red-500">{errors.password}</p>
+              )}
             </div>
+
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-secondary">Confirm password</label>
-              <input id="confirmPassword" type="password" autoComplete="new-password" {...formRegister("confirmPassword")}
-                className="mt-1 block w-full px-3 py-2 bg-secondary border border-primary rounded-md text-primary placeholder-gray-400 focus:outline-none focus:ring-accent focus:border-accent"
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300">
+                Confirm Password
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                value={form.confirmPassword}
+                onChange={(e) => {
+                  setForm({ ...form, confirmPassword: e.target.value });
+                  if (errors.confirmPassword) setErrors({ ...errors, confirmPassword: '' });
+                }}
+                className={`mt-1 block w-full px-4 py-2 bg-white/5 border ${
+                  errors.confirmPassword ? 'border-red-500' : 'border-white/10'
+                } rounded-lg text-white focus:ring-2 focus:ring-accent`}
+                placeholder="••••••••"
               />
-              {errors.confirmPassword && <div className="text-red-500 text-xs mt-1">{errors.confirmPassword.message}</div>}
+              {errors.confirmPassword && (
+                <p className="mt-1 text-sm text-red-500">{errors.confirmPassword}</p>
+              )}
             </div>
           </div>
-          {(errors.root || error) && <div className="text-red-500 text-sm text-center">{errors.root?.message || error}</div>}
+
           <div>
-            <button type="submit" disabled={loading} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-60">{loading ? "Creating account..." : "Create account"}</button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50"
+            >
+              {loading ? 'Creating account...' : 'Create Account'}
+            </button>
           </div>
         </form>
+
+        <div className="text-center">
+          <p className="text-gray-400">
+            Already have an account?{' '}
+            <button
+              onClick={() => router.push('/auth/login')}
+              className="text-accent hover:text-accent-light"
+            >
+              Sign in
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );

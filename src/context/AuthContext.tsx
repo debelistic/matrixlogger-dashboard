@@ -10,6 +10,10 @@ interface User {
   // Add more fields as needed
 }
 
+interface ProfileUpdateData {
+  name: string;
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -17,6 +21,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
+  updateProfile: (data: ProfileUpdateData) => Promise<void>;
+  updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -74,8 +80,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }
 
+  async function updateProfile(data: ProfileUpdateData) {
+    setLoading(true);
+    setError(null);
+    try {
+      const updatedUser = await api.updateProfile(data);
+      setUser(updatedUser);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update profile';
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function updatePassword(currentPassword: string, newPassword: string) {
+    setLoading(true);
+    setError(null);
+    try {
+      await api.updatePassword(currentPassword, newPassword);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update password';
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, register, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      error, 
+      login, 
+      register, 
+      logout,
+      updateProfile,
+      updatePassword
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,41 +1,100 @@
 import Cookies from 'js-cookie';
+import { API_URL } from '../config';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const TOKEN_KEY = 'token';
+
+export function getToken() {
+  return Cookies.get(TOKEN_KEY);
+}
+
+export function setToken(token: string) {
+  Cookies.set(TOKEN_KEY, token);
+}
+
+export function removeToken() {
+  Cookies.remove(TOKEN_KEY);
+}
 
 export async function login(email: string, password: string) {
-  const res = await fetch(`${API_URL}/auth/login`, {
+  const response = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
-  if (!res.ok) throw new Error('Invalid credentials');
-  return res.json(); // { token, user }
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Login failed');
+  }
+
+  return response.json();
 }
 
 export async function register(name: string, email: string, password: string) {
-  const res = await fetch(`${API_URL}/auth/register`, {
+  const response = await fetch(`${API_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, email, password }),
   });
-  if (!res.ok) throw new Error('Registration failed');
-  return res.json(); // { token, user }
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Registration failed');
+  }
+
+  return response.json();
 }
 
 export async function getCurrentUser() {
-  const token = Cookies.get('token');
+  const token = getToken();
   if (!token) return null;
-  const res = await fetch(`${API_URL}/auth/me`, {
-    headers: { 'Authorization': `Bearer ${token}` },
+
+  const response = await fetch(`${API_URL}/auth/me`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
   });
-  if (!res.ok) return null;
-  return res.json(); // { user }
+
+  if (!response.ok) {
+    removeToken();
+    return null;
+  }
+
+  return response.json();
 }
 
-export function setToken(token: string) {
-  Cookies.set('token', token, { expires: 7, secure: true, sameSite: 'lax' });
+export async function updateProfile(data: { name: string }) {
+  const response = await fetch(`${API_URL}/auth/profile`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${getToken()}`
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to update profile');
+  }
+
+  return response.json();
 }
 
-export function removeToken() {
-  Cookies.remove('token');
+export async function updatePassword(currentPassword: string, newPassword: string) {
+  const response = await fetch(`${API_URL}/auth/password`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${getToken()}`
+    },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to update password');
+  }
+
+  return response.json();
 } 

@@ -1,6 +1,8 @@
 import "./globals.css";
 import { AuthProvider } from "../context/AuthContext";
 import { OrganizationProvider } from "../context/OrganizationContext";
+import { ThemeProvider } from '../context/ThemeContext';
+import { Toaster } from 'react-hot-toast';
 
 export const metadata = {
   title: "MatrixLogger Dashboard",
@@ -17,7 +19,10 @@ export default function RootLayout({
       <body className="font-sans bg-background text-primary">
         <AuthProvider>
           <OrganizationProvider>
-            {children}
+            <ThemeProvider>
+          {children}
+              <Toaster position="top-right" />
+            </ThemeProvider>
           </OrganizationProvider>
         </AuthProvider>
       </body>
