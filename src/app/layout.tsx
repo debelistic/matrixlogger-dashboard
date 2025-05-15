@@ -1,5 +1,6 @@
 import "./globals.css";
 import { AuthProvider } from "../context/AuthContext";
+import { OrganizationProvider } from "../context/OrganizationContext";
 
 export const metadata = {
   title: "MatrixLogger Dashboard",
@@ -15,7 +16,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning={true} data-lt-installed="true">
       <body className="font-sans bg-background text-primary">
         <AuthProvider>
-          {children}
+          <OrganizationProvider>
+            {children}
+          </OrganizationProvider>
         </AuthProvider>
       </body>
     </html>

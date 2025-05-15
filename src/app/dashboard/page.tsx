@@ -1,12 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import * as appsApi from "../../api/apps";
+import { useOrganization } from "../../context/OrganizationContext";
 import Link from "next/link";
 
 interface App {
-  id: string;
+  _id: string;
   name: string;
   apiKey: string;
   retentionDays: number;
@@ -15,10 +16,26 @@ interface App {
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
+  const { currentOrganization } = useOrganization();
   const router = useRouter();
   const [apps, setApps] = useState<App[]>([]);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const fetchAll = useCallback(async () => {
+    if (!currentOrganization) return;
+    
+    setFetching(true);
+    setError(null);
+    try {
+      const appsData = await appsApi.fetchOrganizationApps(currentOrganization._id);
+      setApps(appsData);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to load dashboard data");
+    } finally {
+      setFetching(false);
+    }
+  }, [currentOrganization]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -27,26 +44,17 @@ export default function DashboardPage() {
   }, [user, loading, router]);
 
   useEffect(() => {
-    if (user) fetchAll();
-  }, [user]);
-
-  async function fetchAll() {
-    setFetching(true);
-    setError(null);
-    try {
-      const appsData = await appsApi.fetchApps();
-      setApps(appsData);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load dashboard data");
-    } finally {
-      setFetching(false);
-    }
-  }
+    if (user && currentOrganization) fetchAll();
+  }, [user, currentOrganization, fetchAll]);
 
   if (loading || fetching) {
     return <div className="flex justify-center items-center h-64 text-accent">Loading...</div>;
   }
   if (!user) {
+    return null;
+  }
+  if (!currentOrganization) {
+    router.replace("/organizations");
     return null;
   }
 

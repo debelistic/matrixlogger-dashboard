@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
+import { useOrganization } from "../../context/OrganizationContext";
 import * as api from "../../api/apps";
 import toast from "react-hot-toast";
 
 interface App {
-  id: string;
+  _id: string;
   name: string;
   apiKey: string;
   retentionDays: number;
@@ -16,6 +17,7 @@ interface App {
 
 export default function AppsPage() {
   const { user, loading } = useAuth();
+  const { currentOrganization } = useOrganization();
   const router = useRouter();
   const [apps, setApps] = useState<App[]>([]);
   const [fetching, setFetching] = useState(true);
@@ -34,14 +36,15 @@ export default function AppsPage() {
   }, [user, loading, router]);
 
   useEffect(() => {
-    if (user) fetchAll();
-  }, [user]);
+    if (user && currentOrganization) fetchAll();
+  }, [user, currentOrganization]);
 
   async function fetchAll() {
+    if (!currentOrganization) return;
     setFetching(true);
     setError(null);
     try {
-      const data = await api.fetchApps();
+      const data = await api.fetchOrganizationApps(currentOrganization._id);
       setApps(data);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to fetch apps");
@@ -52,14 +55,19 @@ export default function AppsPage() {
 
   async function handleAddOrEdit(e: React.FormEvent) {
     e.preventDefault();
+    if (!currentOrganization) return;
     setFormError(null);
     setFormLoading(true);
     try {
       if (showEdit) {
-        await api.updateApp(showEdit.id, form);
+        await api.updateApp(showEdit._id, form);
         toast.success("App updated successfully");
       } else {
-        await api.createApp(form.name, form.retentionDays);
+        await api.createApp({
+          name: form.name,
+          retentionDays: form.retentionDays,
+          organizationId: currentOrganization._id
+        });
         toast.success("App created successfully");
       }
       setShowAdd(false);
@@ -78,7 +86,7 @@ export default function AppsPage() {
     if (!showDelete) return;
     setFormLoading(true);
     try {
-      await api.deleteApp(showDelete.id);
+      await api.deleteApp(showDelete._id);
       toast.success("App deleted successfully");
       setShowDelete(null);
       fetchAll();
@@ -110,9 +118,9 @@ export default function AppsPage() {
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {apps.map(app => (
           <div
-            key={app.id}
+            key={app._id}
             className="bg-gray-800 rounded-lg p-4 border border-white/10 hover:border-accent transition cursor-pointer"
-            onClick={() => router.push(`/apps/${app.id}`)}
+            onClick={() => router.push(`/apps/${app._id}`)}
           >
             <div className="flex justify-between items-center">
               <h2 className="text-lg font-semibold text-white">{app.name}</h2>

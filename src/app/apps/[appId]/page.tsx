@@ -3,11 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "../../../context/AuthContext";
+import { useOrganization } from "../../../context/OrganizationContext";
 import * as appsApi from "../../../api/apps";
 import * as logsApi from "../../../api/logs";
 
 interface App {
-  id: string;
+  _id: string;
   name: string;
   apiKey: string;
   retentionDays: number;
@@ -48,6 +49,7 @@ function getLevelColor(level?: string) {
 
 export default function AppDetailPage() {
   const { user, loading } = useAuth();
+  const { currentOrganization } = useOrganization();
   const router = useRouter();
   const params = useParams();
   const appId = params?.appId as string;
@@ -65,14 +67,15 @@ export default function AppDetailPage() {
   }, [user, loading, router]);
 
   const fetchApp = useCallback(async () => {
+    if (!currentOrganization) return;
     try {
-      const apps = await appsApi.fetchApps();
-      const found = apps.find((a: App) => a.id === appId);
+      const apps = await appsApi.fetchOrganizationApps(currentOrganization._id);
+      const found = apps.find((a: App) => a._id === appId);
       setApp(found || null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load app details");
     }
-  }, [appId]);
+  }, [appId, currentOrganization]);
 
   const fetchLogs = useCallback(async (cursor?: string | null) => {
     if (!appId || (cursor === null && pagination?.hasNextPage === false)) return;
