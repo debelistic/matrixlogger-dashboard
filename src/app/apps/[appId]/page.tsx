@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "../../../context/AuthContext";
 import * as appsApi from "../../../api/apps";
@@ -22,24 +23,20 @@ interface Log {
   metadata?: Record<string, unknown>;
 }
 
-function getLevelColor(level?: string) {
-  switch (level) {
-    case "error": return "bg-red-600/20 text-red-400 border border-red-400/30";
-    case "warn": return "bg-yellow-500/20 text-yellow-400 border border-yellow-400/30";
-    case "info": return "bg-blue-600/20 text-blue-400 border border-blue-400/30";
-    case "debug": return "bg-green-600/20 text-green-400 border border-green-400/30";
-    default: return "bg-gray-700/20 text-gray-300 border border-gray-400/20";
-  }
+function formatLogLine(log: Log) {
+  const time = new Date(log.timestamp).toLocaleTimeString();
+  const level = log.level?.toUpperCase() || "INFO";
+  return `[${time}] [${level}] ${log.message}`;
 }
 
-function relativeTime(dateString: string) {
-  const now = new Date();
-  const date = new Date(dateString);
-  const diff = (now.getTime() - date.getTime()) / 1000;
-  if (diff < 60) return `${Math.floor(diff)}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return date.toLocaleDateString();
+function getLevelColor(level?: string) {
+  switch (level) {
+    case "error": return "text-red-400";
+    case "warn": return "text-yellow-400";
+    case "info": return "text-blue-400";
+    case "debug": return "text-green-400";
+    default: return "text-gray-400";
+  }
 }
 
 export default function AppDetailPage() {
@@ -50,108 +47,127 @@ export default function AppDetailPage() {
   const [app, setApp] = useState<App | null>(null);
   const [logs, setLogs] = useState<Log[]>([]);
   const [fetching, setFetching] = useState(true);
-  const [, setError] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [logOffset, setLogOffset] = useState(0);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.replace("/auth/login");
-    }
+    if (!loading && !user) router.replace("/auth/login");
   }, [user, loading, router]);
 
-  useEffect(() => {
-    if (user && appId) fetchAll();
-    // eslint-disable-next-line
-  }, [user, appId]);
-
-  async function fetchAll() {
-    setFetching(true);
-    setError(null);
+  const fetchApp = useCallback(async () => {
     try {
       const apps = await appsApi.fetchApps();
       const found = apps.find((a: App) => a.id === appId);
-      setApp(found);
-      const logs = await logsApi.fetchLogs(appId, 100);
-      setLogs(logs);
+      setApp(found || null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load app details");
+    }
+  }, [appId]);
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const fetchLogs = useCallback(async (offset = 0, limit = 50) => {
+    try {
+      const newLogs = await logsApi.fetchLogs(appId, limit);
+      setLogs(prev => {
+        const existingIds = new Set(prev.map(log => log.id));
+        const filteredNew = newLogs.filter((log: Log) => !existingIds.has(log.id));
+        return [...prev, ...filteredNew];
+      });
+      setLogOffset(prev => prev + limit);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to load logs");
     } finally {
       setFetching(false);
     }
-  }
+  }, [appId]);
 
-  if (loading || fetching) {
-    return <div className="flex justify-center items-center h-64 text-accent">Loading...</div>;
+  useEffect(() => {
+    if (user && appId) {
+      setFetching(true);
+      fetchApp();
+      fetchLogs();
+    }
+  }, [user, appId, fetchApp, fetchLogs]);
+
+  useEffect(() => {
+    const container = logContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const nearBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 100;
+      if (nearBottom && !fetching) {
+        setFetching(true);
+        fetchLogs(logOffset);
+      }
+    };
+
+    container.addEventListener("scroll", handleScroll);
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [fetchLogs, fetching, logOffset]);
+
+  if (loading || fetching && logs.length === 0) {
+    return <div className="text-center py-20 text-gray-400 animate-pulse">Loading logs...</div>;
   }
   if (!user || !app) {
     return <div className="text-center text-gray-400 mt-12">App not found.</div>;
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-5xl mx-auto px-4">
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => router.push("/apps")}
-          className="text-accent hover:underline text-sm font-medium flex items-center gap-1">
-          <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+        <button
+          onClick={() => router.push("/apps")}
+          className="text-accent hover:underline text-sm font-medium flex items-center gap-1"
+        >
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
+            <path d="M15 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
           Back to Apps
         </button>
-        <h1 className="text-2xl font-bold text-accent flex-1">{app.name}</h1>
+        <h1 className="text-2xl font-bold text-white">{app.name}</h1>
       </div>
-      <div className="bg-white/10 rounded-xl p-6 shadow border border-white/10 mb-8">
-        <div className="mb-2 text-gray-400 text-sm">API Key:</div>
-        <div className="font-mono text-accent text-lg break-all mb-2">{app.apiKey}</div>
-        <div className="text-gray-400 text-sm">Retention: <span className="text-white font-semibold">{app.retentionDays} days</span></div>
-        <div className="text-gray-400 text-sm">Created: <span className="text-white font-semibold">{new Date(app.createdAt).toLocaleDateString()}</span></div>
-      </div>
-      <div className="bg-white/10 rounded-xl p-6 shadow border border-white/10">
-        <h2 className="text-lg font-semibold mb-4 text-white">Recent Logs</h2>
+
+      <section className="bg-zinc-900 border border-zinc-700/40 rounded-lg px-6 py-4 mb-8">
+        <div className="text-sm text-gray-400 mb-1">API Key:</div>
+        <div className="text-accent font-mono text-xs break-all mb-2">{app.apiKey}</div>
+        <div className="flex gap-4 text-xs text-gray-400">
+          <span>Retention: <span className="text-white font-semibold">{app.retentionDays} days</span></span>
+          <span>Created: <span className="text-white font-semibold">{new Date(app.createdAt).toLocaleDateString()}</span></span>
+        </div>
+      </section>
+
+      <section className="bg-black border border-zinc-800 rounded-lg p-4 shadow-inner max-h-[75vh] overflow-y-auto" ref={logContainerRef}>
+        <h2 className="text-base font-semibold text-white mb-4">Logs</h2>
         {logs.length === 0 ? (
-          <div className="text-gray-400">No logs found for this app.</div>
+          <div className="text-gray-500 italic">No logs found for this app.</div>
         ) : (
-          <div className="max-h-[600px] overflow-y-auto space-y-4 pr-2">
+          <div className="space-y-3 font-mono text-sm text-white">
             {logs.map((log, i) => (
-              <div
-                key={log.id || i}
-                className="transition bg-zinc-900/80 border border-white/10 rounded-lg p-4 shadow hover:shadow-lg hover:border-accent/40 group relative"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span
-                    className="text-xs text-gray-400 cursor-help"
-                    title={new Date(log.timestamp).toLocaleString()}
-                  >
-                    {relativeTime(log.timestamp)}
-                  </span>
-                  {log.level && (
-                    <span
-                      className={`ml-2 px-2 py-0.5 rounded text-xs font-semibold border ${getLevelColor(log.level)}`}
+              <div key={log.id || i} className="group hover:bg-zinc-900/50 px-2 py-1 rounded">
+                <div className={`flex justify-between items-start gap-2 ${getLevelColor(log.level)}`}>
+                  <div className="whitespace-pre-wrap break-words">{formatLogLine(log)}</div>
+                  {log.metadata && (
+                    <button
+                      onClick={() => setExpanded(e => ({ ...e, [log.id]: !e[log.id] }))}
+                      className="text-xs underline text-accent hover:text-white"
                     >
-                      {log.level.toUpperCase()}
-                    </span>
+                      {expanded[log.id] ? "Hide" : "Meta"}
+                    </button>
                   )}
                 </div>
-                <div className="text-white font-mono text-sm break-words mb-2">
-                  {log.message}
-                </div>
-                {log.metadata && (
-                  <div>
-                    <button
-                      className="text-xs text-accent hover:underline focus:outline-none mb-1"
-                      onClick={() => setExpanded(e => ({ ...e, [log.id]: !e[log.id] }))}
-                    >
-                      {expanded[log.id] ? "Hide metadata" : "Show metadata"}
-                    </button>
-                    {expanded[log.id] && (
-                      <pre className="text-xs bg-zinc-800/80 rounded p-2 text-gray-300 border border-white/10 overflow-x-auto mt-1">
-                        {JSON.stringify(log.metadata, null, 2)}
-                      </pre>
-                    )}
-                  </div>
+                {expanded[log.id] && log.metadata && (
+                  <pre className="text-xs mt-2 p-2 bg-zinc-800 text-gray-300 border border-zinc-700 rounded overflow-x-auto">
+                    {JSON.stringify(log.metadata, null, 2)}
+                  </pre>
                 )}
               </div>
             ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
-} 
+}
