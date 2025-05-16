@@ -1,12 +1,13 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import * as api from '../api/auth';
 
 interface User {
-  _id: string;
-  name: string;
+  id: string;
   email: string;
+  name: string;
   // Add more fields as needed
 }
 
@@ -23,25 +24,67 @@ interface AuthContextType {
   logout: () => void;
   updateProfile: (data: ProfileUpdateData) => Promise<void>;
   updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  setUser: (user: User | null) => void;
+  clearError: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+  error: null,
+  login: async () => {},
+  register: async () => {},
+  logout: () => {},
+  updateProfile: async () => {},
+  updatePassword: async () => {},
+  setUser: () => {},
+  clearError: () => {},
+});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
-  // Load user from cookie on mount
-  useEffect(() => {
-    async function loadUser() {
-      setLoading(true);
-      const res = await api.getCurrentUser();
-      if (res && res.user) setUser(res.user);
-      setLoading(false);
-    }
-    loadUser();
+  const clearError = useCallback(() => {
+    setError(null);
   }, []);
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        const data = await api.getCurrentUser();
+        if (data?.user) {
+          setUser(data.user);
+          setError(null);
+        } else {
+          // Clear user state if no user data
+          setUser(null);
+          api.removeToken();
+        }
+        break;
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        retries--;
+        if (retries === 0) {
+          // Clear user state on final retry failure
+          setUser(null);
+          api.removeToken();
+          setError('Authentication failed. Please log in again.');
+        }
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
 
   async function login(email: string, password: string) {
     setLoading(true);
@@ -75,10 +118,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  function logout() {
-    api.removeToken();
+  const logout = () => {
     setUser(null);
-  }
+    api.removeToken();
+    router.push('/auth/login');
+  };
 
   async function updateProfile(data: ProfileUpdateData) {
     setLoading(true);
@@ -118,7 +162,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       register, 
       logout,
       updateProfile,
-      updatePassword
+      updatePassword,
+      setUser,
+      clearError
     }}>
       {children}
     </AuthContext.Provider>
@@ -126,7 +172,5 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
+  return useContext(AuthContext);
 } 

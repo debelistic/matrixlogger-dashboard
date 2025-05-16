@@ -1,99 +1,181 @@
 "use client";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
-import { useAuth } from "../../../context/AuthContext";
-import Image from "next/image";
-import { useEffect } from "react";
-
-const LoginSchema = z.object({
-  email: z.string().email({ message: "Invalid email address" }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters" }),
-});
-
-type LoginForm = z.infer<typeof LoginSchema>;
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useAuth } from '../../../context/AuthContext';
+import { loginSchema, type LoginFormData } from '../../../schemas/auth';
+import { FormInput } from '../../../components/ui/FormInput';
+import { AlertError } from '../../../components/ui/AlertError';
+import toast from 'react-hot-toast';
 
 export default function LoginPage() {
-  const { login, error, loading, user } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
+  const { login, loading: authLoading, error: authError, user, clearError } = useAuth();
+
   const {
-    register: formRegister,
+    register,
     handleSubmit,
     formState: { errors },
     setError,
     clearErrors,
-  } = useForm<LoginForm>({ resolver: zodResolver(LoginSchema) });
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    mode: 'onBlur',
+  });
 
-  async function onSubmit(data: LoginForm) {
-    clearErrors();
+  const onSubmit = async (data: LoginFormData) => {
     try {
+      setIsSubmitting(true);
       await login(data.email, data.password);
-      router.push("/dashboard");
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Login failed";
-      setError("root", { message });
+    } catch {
+      // Set form-level error
+      setError('root', {
+        type: 'manual',
+        message: 'Invalid credentials. Please check your email and password.',
+      });
+      toast.error('Login failed. Please check your credentials and try again.');
+    } finally {
+      setIsSubmitting(false);
     }
-  }
+  };
 
-
-
+  // Use an effect to handle successful login and redirection
   useEffect(() => {
-    if (user) {
-      router.replace("/dashboard");
+    if (user && !authLoading && !authError) {
+      toast.success('Login successful! Redirecting to dashboard...');
+      router.push('/dashboard');
     }
-  }, [user, router]);
+  }, [user, authLoading, authError, router]);
+
+  const loading = isSubmitting || authLoading;
+
+  const handleDismissError = () => {
+    clearErrors('root');
+    clearError();
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-2">
-      <div className="max-w-md w-full space-y-8 p-6 sm:p-8 bg-primary rounded-xl shadow-lg">
-        {/* App Logo */}
-        <div className="flex flex-col items-center mb-2">
-          <Image src="/logo.webp" alt="MatrixLogger logo" width={48} height={48} className="rounded-lg shadow" priority />
-          <span className="mt-2 text-xl font-bold text-accent tracking-tight">MatrixLogger</span>
-        </div>
-        {/* Social Auth Buttons */}
-        <div className="flex flex-col gap-3 mb-4">
-          <a href="/api/v1/auth/github" className="flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 rounded-lg transition-colors border border-gray-700">
-            <svg width="20" height="20" fill="currentColor" className="mr-2" viewBox="0 0 24 24"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.73 1.27 3.4.97.11-.75.41-1.27.74-1.56-2.56-.29-5.26-1.28-5.26-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 2.9-.39c.98 0 1.97.13 2.9.39 2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.43-2.7 5.41-5.27 5.7.42.36.79 1.09.79 2.2 0 1.59-.01 2.87-.01 3.26 0 .31.21.68.8.56C20.71 21.39 24 17.08 24 12c0-6.27-5.23-11.5-12-11.5z"/></svg>
-            Continue with GitHub
-          </a>
-          <a href="/api/v1/auth/google" className="flex items-center justify-center gap-2 bg-white hover:bg-gray-100 text-gray-800 font-medium py-2 rounded-lg transition-colors border border-gray-300">
-            <svg width="20" height="20" viewBox="0 0 48 48"><g><path fill="#4285F4" d="M24 9.5c3.54 0 6.7 1.22 9.19 3.23l6.85-6.85C36.13 2.7 30.45 0 24 0 14.82 0 6.73 5.82 2.69 14.09l7.98 6.19C12.13 14.09 17.62 9.5 24 9.5z"/><path fill="#34A853" d="M46.1 24.55c0-1.64-.15-3.22-.42-4.74H24v9.01h12.42c-.54 2.9-2.18 5.36-4.65 7.03l7.19 5.6C43.27 37.27 46.1 31.45 46.1 24.55z"/><path fill="#FBBC05" d="M10.67 28.68a14.5 14.5 0 0 1 0-9.36l-7.98-6.19A23.94 23.94 0 0 0 0 24c0 3.77.9 7.34 2.69 10.55l7.98-6.19z"/><path fill="#EA4335" d="M24 48c6.45 0 12.13-2.13 16.63-5.8l-7.19-5.6c-2.01 1.35-4.6 2.15-7.44 2.15-6.38 0-11.87-4.59-13.83-10.81l-7.98 6.19C6.73 42.18 14.82 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></g></svg>
-            Continue with Google
-          </a>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
         <div>
-          <h2 className="text-center text-2xl font-bold text-accent mb-2">Sign in to your account</h2>
-          <p className="mt-2 text-center text-secondary text-sm">
-            Or <a href="/auth/register" className="text-accent hover:underline">create a new account</a>
+          <div className="flex justify-center mb-8">
+            <div className="relative w-[180px] h-[40px]">
+              <Image
+                src="/logo_with_text.webp"
+                alt="MatrixLogger"
+                fill
+                priority
+                className="object-contain"
+              />
+            </div>
+          </div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-white">
+            Sign in to your account
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-400">
+            Or{' '}
+            <Link href="/auth/register" className="font-medium text-accent hover:text-accent-light">
+              create a new account
+            </Link>
           </p>
         </div>
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)} noValidate>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-secondary">Email address</label>
-              <input id="email" type="email" autoComplete="email" {...formRegister("email")}
-                className="mt-1 block w-full px-3 py-2 bg-secondary border border-primary rounded-md text-primary placeholder-gray-400 focus:outline-none focus:ring-accent focus:border-accent"
-              />
-              {errors.email && <div className="text-red-500 text-xs mt-1">{errors.email.message}</div>}
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-secondary">Password</label>
-              <input id="password" type="password" autoComplete="current-password" {...formRegister("password")}
-                className="mt-1 block w-full px-3 py-2 bg-secondary border border-primary rounded-md text-primary placeholder-gray-400 focus:outline-none focus:ring-accent focus:border-accent"
-              />
-              {errors.password && <div className="text-red-500 text-xs mt-1">{errors.password.message}</div>}
-            </div>
+          {/* Display form-level errors */}
+          {(errors.root?.message || authError) && (
+            <AlertError
+              message={errors.root?.message || authError || 'An error occurred'}
+              onDismiss={handleDismissError}
+            />
+          )}
+
+          <div className="rounded-md shadow-sm -space-y-px">
+            <FormInput<LoginFormData>
+              id="email"
+              label="Email address"
+              type="email"
+              autoComplete="email"
+              register={register}
+              error={errors.email}
+              className="rounded-t-md"
+            />
+            <FormInput<LoginFormData>
+              id="password"
+              label="Password"
+              type="password"
+              autoComplete="current-password"
+              register={register}
+              error={errors.password}
+              className="rounded-b-md"
+            />
           </div>
+
           <div className="flex items-center justify-between">
             <div className="text-sm">
-              <a href="/auth/forgot-password" className="text-accent hover:underline">Forgot your password?</a>
+              <Link href="/auth/forgot-password" className="font-medium text-accent hover:text-accent-light">
+                Forgot your password?
+              </Link>
             </div>
           </div>
-          {(errors.root || error) && <div className="text-red-500 text-sm text-center">{errors.root?.message || error}</div>}
+
           <div>
-            <button type="submit" disabled={loading} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-60">{loading ? "Signing in..." : "Sign in"}</button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span className="absolute left-0 inset-y-0 flex items-center pl-3">
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </span>
+                  Signing in...
+                </>
+              ) : (
+                'Sign in'
+              )}
+            </button>
+          </div>
+
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-700" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-gray-900 text-gray-400">Or continue with</span>
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <a
+                href={`${process.env.NEXT_PUBLIC_API_URL}/auth/github`}
+                className="w-full inline-flex justify-center py-2 px-4 border border-gray-700 rounded-md shadow-sm bg-gray-800 text-sm font-medium text-white hover:bg-gray-700"
+              >
+                <span className="sr-only">Sign in with GitHub</span>
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 0C4.477 0 0 4.484 0 10.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0110 4.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.203 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.942.359.31.678.921.678 1.856 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0020 10.017C20 4.484 15.522 0 10 0z" clipRule="evenodd" />
+                </svg>
+              </a>
+
+              <a
+                href={`${process.env.NEXT_PUBLIC_API_URL}/auth/google`}
+                className="w-full inline-flex justify-center py-2 px-4 border border-gray-700 rounded-md shadow-sm bg-gray-800 text-sm font-medium text-white hover:bg-gray-700"
+              >
+                <span className="sr-only">Sign in with Google</span>
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/>
+                </svg>
+              </a>
+            </div>
           </div>
         </form>
       </div>

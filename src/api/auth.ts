@@ -15,34 +15,47 @@ export function removeToken() {
   Cookies.remove(TOKEN_KEY);
 }
 
-export async function login(email: string, password: string) {
-  const response = await fetch(`${API_URL}/auth/login`, {
+export interface AuthResponse {
+  token: string;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+  };
+}
+
+export async function login(email: string, password: string): Promise<AuthResponse> {
+  const res = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ email, password }),
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Login failed');
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to login');
   }
 
-  return response.json();
+  return res.json();
 }
 
-export async function register(name: string, email: string, password: string) {
-  const response = await fetch(`${API_URL}/auth/register`, {
+export async function register(name: string, email: string, password: string): Promise<AuthResponse> {
+  const res = await fetch(`${API_URL}/auth/register`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ name, email, password }),
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Registration failed');
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to register');
   }
 
-  return response.json();
+  return res.json();
 }
 
 export async function getCurrentUser() {
@@ -97,4 +110,34 @@ export async function updatePassword(currentPassword: string, newPassword: strin
   }
 
   return response.json();
+}
+
+export async function forgotPassword(email: string): Promise<void> {
+  const res = await fetch(`${API_URL}/auth/forgot-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to process forgot password request');
+  }
+}
+
+export async function resetPassword(token: string, password: string): Promise<void> {
+  const res = await fetch(`${API_URL}/auth/reset-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ token, password }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to reset password');
+  }
 } 
