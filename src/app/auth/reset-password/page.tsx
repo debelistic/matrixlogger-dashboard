@@ -1,67 +1,94 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { FormInput } from '../../../components/ui/FormInput';
+import { AlertError } from '../../../components/ui/AlertError';
 import { resetPassword } from '../../../api/auth';
 import toast from 'react-hot-toast';
 
-export default function ResetPasswordPage() {
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
+const resetPasswordSchema = z.object({
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number')
+    .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
+  confirmPassword: z.string()
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
+
+type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
+
+function ResetPasswordContent() {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  useEffect(() => {
-    const tokenParam = searchParams.get('token');
-    if (!tokenParam) {
-      toast.error('Invalid reset link');
-      router.push('/auth/login');
-      return;
-    }
-    setToken(tokenParam);
-  }, [searchParams, router]);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setError,
+    clearErrors,
+  } = useForm<ResetPasswordFormData>({
+    resolver: zodResolver(resetPasswordSchema),
+    mode: 'onBlur',
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (password.length < 6) {
-      toast.error('Password must be at least 6 characters');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      toast.error('Passwords do not match');
-      return;
-    }
-
+  const onSubmit = async (data: ResetPasswordFormData) => {
+    const token = searchParams.get('token');
     if (!token) {
-      toast.error('Invalid reset token');
+      setError('root', {
+        type: 'manual',
+        message: 'Invalid or expired reset token',
+      });
       return;
     }
 
     try {
-      setLoading(true);
-      await resetPassword(token, password);
-      toast.success('Password has been reset successfully');
+      setIsSubmitting(true);
+      await resetPassword(token, data.password);
+      toast.success('Password reset successful');
       router.push('/auth/login');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to reset password');
+    } catch {
+      setError('root', {
+        type: 'manual',
+        message: 'Failed to reset password. Please try again.',
+      });
+      toast.error('Failed to reset password. Please try again.');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  if (!token) {
-    return null;
-  }
+  const handleDismissError = () => {
+    clearErrors('root');
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
+          <div className="flex justify-center mb-8">
+            <div className="relative w-[180px] h-[40px]">
+              <Image
+                src="/logo_with_text.webp"
+                alt="MatrixLogger"
+                fill
+                priority
+                className="object-contain"
+              />
+            </div>
+          </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-white">
             Reset your password
           </h2>
@@ -69,49 +96,56 @@ export default function ResetPasswordPage() {
             Enter your new password below
           </p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)} noValidate>
+          {errors.root?.message && (
+            <AlertError
+              message={errors.root.message}
+              onDismiss={handleDismissError}
+            />
+          )}
+
           <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="password" className="sr-only">
-                New password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white placeholder-gray-400 rounded-t-md focus:outline-none focus:ring-accent focus:border-accent focus:z-10 sm:text-sm"
-                placeholder="New password"
-              />
-            </div>
-            <div>
-              <label htmlFor="confirm-password" className="sr-only">
-                Confirm new password
-              </label>
-              <input
-                id="confirm-password"
-                name="confirm-password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white placeholder-gray-400 rounded-b-md focus:outline-none focus:ring-accent focus:border-accent focus:z-10 sm:text-sm"
-                placeholder="Confirm new password"
-              />
-            </div>
+            <FormInput<ResetPasswordFormData>
+              id="password"
+              label="New Password"
+              type="password"
+              autoComplete="new-password"
+              register={register}
+              error={errors.password}
+              className="rounded-t-md"
+            />
+            <FormInput<ResetPasswordFormData>
+              id="confirmPassword"
+              label="Confirm New Password"
+              type="password"
+              autoComplete="new-password"
+              register={register}
+              error={errors.confirmPassword}
+              className="rounded-b-md"
+            />
           </div>
 
           <div>
             <button
               type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50"
+              disabled={isSubmitting}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-disabled={isSubmitting}
             >
-              {loading ? 'Resetting password...' : 'Reset password'}
+              {isSubmitting ? (
+                <>
+                  <span className="absolute left-0 inset-y-0 flex items-center pl-3">
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </span>
+                  Resetting password...
+                </>
+              ) : (
+                'Reset Password'
+              )}
             </button>
           </div>
 
@@ -126,5 +160,17 @@ export default function ResetPasswordPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-accent">Loading...</div>
+      </div>
+    }>
+      <ResetPasswordContent />
+    </Suspense>
   );
 } 

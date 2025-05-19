@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import toast from 'react-hot-toast';
 
-export default function JoinOrganizationPage() {
+function JoinOrganizationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
@@ -60,7 +60,7 @@ export default function JoinOrganizationPage() {
         acceptInvitation();
       }
     }
-  }, [authLoading, user]);
+  }, [authLoading, user, registrationNeeded, router, searchParams]);
 
   if (loading) {
     return (
@@ -110,5 +110,17 @@ export default function JoinOrganizationPage() {
     <div className="flex justify-center items-center min-h-screen">
       <div className="text-accent">Processing invitation...</div>
     </div>
+  );
+}
+
+export default function JoinOrganizationPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-accent">Loading...</div>
+      </div>
+    }>
+      <JoinOrganizationContent />
+    </Suspense>
   );
 } 

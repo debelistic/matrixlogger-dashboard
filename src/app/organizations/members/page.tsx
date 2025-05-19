@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import { useOrganization } from '../../../context/OrganizationContext';
@@ -45,19 +45,7 @@ export default function MembersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace('/auth/login');
-    }
-  }, [user, authLoading, router]);
-
-  useEffect(() => {
-    if (currentOrganization) {
-      fetchMembers();
-    }
-  }, [currentOrganization]);
-
-  const fetchMembers = async () => {
+  const fetchMembers = useCallback(async () => {
     if (!currentOrganization) return;
     
     try {
@@ -86,7 +74,19 @@ export default function MembersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentOrganization]);
+
+  useEffect(() => {
+    if (currentOrganization) {
+      fetchMembers();
+    }
+  }, [currentOrganization, fetchMembers]);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/auth/login');
+    }
+  }, [user, authLoading, router]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();

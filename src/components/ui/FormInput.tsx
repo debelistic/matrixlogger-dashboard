@@ -22,7 +22,6 @@ export function FormInput<TFormValues extends FieldValues>({
   error,
   register,
   registerOptions,
-  required = false,
   autoComplete,
   className = '',
 }: FormInputProps<TFormValues>) {
